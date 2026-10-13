@@ -9,10 +9,23 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-party_management}?schema=public
       NODE_ENV: production
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "${APP_PORT:-3000}:3000"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: party-management-migrate
+    command: ["sh", "-c", "npx prisma db push && npm run db:seed"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-party_management}?schema=public
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:16-alpine

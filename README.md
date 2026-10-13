@@ -57,12 +57,7 @@ npm run dev
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-3. Crear tablas y datos iniciales dentro del contenedor:
-
-```bash
-docker compose -f docker-compose.prod.yml exec app npx prisma db push
-docker compose -f docker-compose.prod.yml exec app npm run db:seed
-```
+3. El servicio `migrate` espera a PostgreSQL, crea/actualiza tablas con Prisma y carga datos iniciales antes de iniciar la app.
 
 4. La app queda expuesta en `APP_PORT`.
 
