@@ -1,0 +1,1032 @@
+:root {
+  --bg: #f5f6f7;
+  --surface: #ffffff;
+  --surface-soft: #f9fafb;
+  --text: #1f2933;
+  --muted: #667085;
+  --border: #d7dde5;
+  --primary: #2f5f8f;
+  --primary-dark: #23486d;
+  --success: #2f7d52;
+  --warning: #946200;
+  --accepted: #b45309;
+  --danger: #b42318;
+  --info: #2563a6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #263241;
+  color: #eef2f6;
+  padding: 20px 16px;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.brandMark {
+  align-items: center;
+  background: #eef2f6;
+  color: #263241;
+  display: inline-flex;
+  font-weight: 700;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.brand small {
+  color: #b9c2cf;
+  display: block;
+  margin-top: 2px;
+}
+
+.navList {
+  display: grid;
+  gap: 4px;
+}
+
+.navList a {
+  border-left: 3px solid transparent;
+  color: #dde5ef;
+  padding: 9px 10px;
+}
+
+.navList a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-left-color: #9fb5cc;
+}
+
+.mainContent {
+  padding: 24px;
+}
+
+.pageHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.pageHeader h1 {
+  font-size: 24px;
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+
+.pageHeader p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.buttonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.buttonRow form {
+  display: inline-flex;
+}
+
+.buttonRow .button {
+  white-space: nowrap;
+}
+
+.actionCell {
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 430px;
+}
+
+.button {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.button.primary:hover {
+  background: var(--primary-dark);
+}
+
+.button.danger {
+  border-color: #f0b4ae;
+  color: var(--danger);
+}
+
+.iconButton {
+  font-weight: 700;
+  justify-content: center;
+  min-width: 36px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.calendarControls {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendarViewToggle {
+  display: flex;
+  gap: 4px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid.columns3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid.columns2 {
+  grid-template-columns: 1.25fr 0.75fr;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.panelHeader {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.panelHeader h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.panelBody {
+  padding: 14px;
+}
+
+.metric {
+  display: grid;
+  gap: 5px;
+}
+
+.metric strong {
+  font-size: 24px;
+}
+
+.metric span {
+  color: var(--muted);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--surface-soft);
+  color: #475467;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.statusCONSULTA,
+.statusFINALIZADO {
+  color: #475467;
+}
+
+.statusCOTIZADO {
+  color: var(--warning);
+}
+
+.statusACEPTADO {
+  color: var(--accepted);
+}
+
+.statusRESERVADO {
+  color: var(--success);
+}
+
+.statusCONFIRMADO {
+  color: var(--info);
+}
+
+.statusCANCELADO {
+  color: var(--danger);
+}
+
+.calendarGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+}
+
+.calendarGrid.calendarView-week {
+  grid-template-columns: repeat(7, minmax(110px, 1fr));
+}
+
+.calendarGrid.calendarView-threeDays {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.dayCell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-height: 130px;
+  padding: 8px;
+}
+
+.dayCell header {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.eventPill {
+  border-left: 3px solid #98a2b3;
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 5px 6px;
+  background: #f8fafc;
+}
+
+.eventButton {
+  border-bottom: 0;
+  border-right: 0;
+  border-top: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.eventButton:hover {
+  background: #eef4fb;
+}
+
+.eventPill.statusCOTIZADO {
+  border-left-color: var(--warning);
+}
+
+.eventPill.statusACEPTADO {
+  border-left-color: var(--accepted);
+}
+
+.eventPill.statusRESERVADO {
+  border-left-color: var(--success);
+}
+
+.eventPill.statusCONFIRMADO {
+  border-left-color: var(--info);
+}
+
+.eventPill strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.eventPill span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.warningBox {
+  background: #fffbeb;
+  border: 1px solid #f4c96b;
+  color: #7a4b00;
+  padding: 10px 12px;
+}
+
+.noticeBox {
+  background: #f0fdf4;
+  border: 1px solid #9bd5ae;
+  color: #245b3b;
+  padding: 10px 12px;
+}
+
+.modalBackdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 20;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  max-height: calc(100vh - 36px);
+  max-width: 860px;
+  overflow: auto;
+  width: 100%;
+}
+
+.eventModal {
+  max-width: 760px;
+}
+
+.eventModalHeader {
+  background: var(--surface-soft);
+}
+
+.eventModalBody {
+  display: grid;
+  gap: 14px;
+}
+
+.eventInfoGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.eventInfoCard {
+  align-content: start;
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  padding: 10px 12px;
+}
+
+.eventInfoCard span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.eventInfoCard strong:not(.badge) {
+  font-size: 15px;
+}
+
+.statusTextValue {
+  font-size: 15px;
+}
+
+.summaryLine {
+  align-items: center;
+  border: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.summaryLine span {
+  color: var(--muted);
+}
+
+.depositStatusList {
+  display: grid;
+}
+
+.depositStatusCard {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(190px, 1fr) 140px 130px 140px 160px;
+  padding: 12px 14px;
+}
+
+.depositStatusCard:last-child {
+  border-bottom: 0;
+}
+
+.depositStatusCard.isPending {
+  border-left: 4px solid #d97706;
+}
+
+.depositStatusCard.isCovered {
+  border-left: 4px solid var(--success);
+}
+
+.depositStatusCard p {
+  margin: 4px 0 0;
+}
+
+.depositStatusCard div {
+  display: grid;
+  gap: 4px;
+}
+
+.depositStatusCard span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.statusText.success {
+  color: var(--success);
+}
+
+.statusText.warning {
+  color: #b45309;
+}
+
+.formGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+}
+
+.field label {
+  color: #344054;
+  font-weight: 600;
+}
+
+.fieldHelp {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.warningInline {
+  background: #fffbeb;
+  border: 1px solid #f4c96b;
+  color: #7a4b00;
+  padding: 8px 10px;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid var(--border);
+  min-height: 36px;
+  padding: 8px;
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled {
+  background: #eef1f4;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.fullWidth,
+.formActions {
+  grid-column: 1 / -1;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.compactField {
+  min-width: 170px;
+}
+
+.compactField label {
+  font-size: 12px;
+}
+
+.quoteServicesList {
+  border: 1px solid var(--border);
+  display: grid;
+}
+
+.quoteServiceHeader,
+.quoteServiceRow {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) 105px 95px 125px 105px;
+  padding: 10px;
+}
+
+.quoteServiceHeader {
+  align-items: center;
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--border);
+  color: #475467;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.quoteServiceRow {
+  border-bottom: 1px solid var(--border);
+}
+
+.quoteServiceRow:last-child,
+.quoteServiceRow:has(+ .serviceEmptyState) {
+  border-bottom: 0;
+}
+
+.quoteServiceRow label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.quoteServiceRow input {
+  min-width: 0;
+  width: 100%;
+}
+
+.quoteServiceRow .checkCell {
+  align-items: center;
+  display: flex;
+  min-height: 36px;
+}
+
+.quoteServiceRow input[type="checkbox"] {
+  height: 16px;
+  min-height: auto;
+  width: 16px;
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.serviceEmptyState {
+  margin: 0;
+  padding: 12px;
+}
+
+.quoteTotalizer {
+  align-items: center;
+  background: #f8fafc;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 12px 10px;
+}
+
+.quoteTotalizer span {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.quoteTotalizer strong {
+  font-size: 18px;
+}
+
+.publicQuotePage {
+  background: #eef1f4;
+  min-height: 100vh;
+  padding: 32px 18px;
+}
+
+.publicQuoteCard {
+  background: var(--surface);
+  border: 1px solid #cfd6df;
+  box-shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+  margin: 0 auto;
+  max-width: 1040px;
+}
+
+.publicQuoteHeader {
+  align-items: flex-start;
+  background: #fbfcfd;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 28px;
+}
+
+.publicQuoteHeader h1 {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  margin: 4px 0 8px;
+}
+
+.publicQuoteHeader p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 620px;
+}
+
+.publicEyebrow {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.publicSummaryGrid {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.publicSummaryGrid div {
+  border-right: 1px solid var(--border);
+  display: grid;
+  gap: 5px;
+  padding: 16px 18px;
+}
+
+.publicSummaryGrid div:last-child {
+  border-right: 0;
+}
+
+.publicSummaryGrid span,
+.publicTotalsPanel span,
+.publicSectionHeader span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.publicQuoteBody {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  padding: 22px;
+}
+
+.publicItemsPanel,
+.publicTotalsPanel,
+.publicConditions {
+  border: 1px solid var(--border);
+}
+
+.publicSectionHeader {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.publicSectionHeader h2,
+.publicConditions h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.publicItemsTable {
+  min-width: 620px;
+}
+
+.publicTotalsPanel {
+  align-self: start;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.publicTotalsPanel div {
+  display: grid;
+  gap: 5px;
+}
+
+.publicTotalsPanel strong {
+  font-size: 24px;
+}
+
+.publicTotalsPanel p {
+  background: #fffbeb;
+  border: 1px solid #f4c96b;
+  color: #7a4b00;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px;
+}
+
+.publicActions {
+  display: grid;
+  gap: 8px;
+}
+
+.publicActions .button,
+.publicActions form {
+  justify-content: center;
+  width: 100%;
+}
+
+.publicConditions {
+  display: grid;
+  gap: 8px;
+  margin: 0 22px 22px;
+  padding: 14px;
+}
+
+.publicConditions p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 14px;
+  }
+
+  .navList {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .navList a {
+    white-space: nowrap;
+  }
+
+  .mainContent {
+    padding: 16px;
+  }
+
+  .pageHeader,
+  .grid.columns2,
+  .grid.columns3,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pageHeader {
+    display: grid;
+  }
+
+  .calendarControls {
+    align-items: stretch;
+  }
+
+  .calendarViewToggle {
+    width: 100%;
+  }
+
+  .calendarViewToggle .button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .calendarGrid,
+  .calendarGrid.calendarView-week {
+    gap: 4px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .calendarGrid.calendarView-threeDays {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dayCell {
+    min-height: 86px;
+    padding: 5px;
+  }
+
+  .dayCell header {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .eventPill {
+    gap: 1px;
+    margin-top: 4px;
+    padding: 4px;
+  }
+
+  .eventPill strong,
+  .eventPill span {
+    font-size: 10px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tableWrap {
+    overflow: visible;
+  }
+
+  table.responsiveTable {
+    min-width: 0;
+  }
+
+  .responsiveTable thead {
+    display: none;
+  }
+
+  .responsiveTable tbody,
+  .responsiveTable tr,
+  .responsiveTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .responsiveTable tr {
+    border: 1px solid var(--border);
+    margin-bottom: 10px;
+    padding: 10px;
+  }
+
+  .responsiveTable td {
+    border-bottom: 0;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 110px 1fr;
+    padding: 6px 0;
+  }
+
+  .responsiveTable td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .responsiveTable td[data-label="Acciones"] {
+    display: block;
+  }
+
+  .responsiveTable td[data-label="Acciones"]::before {
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .responsiveTable td[data-label="Acciones"].actionCell {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .responsiveTable td[data-label="Acciones"].actionCell::before {
+    display: none;
+  }
+
+  .responsiveTable td[data-label="Acciones"].actionCell .button {
+    font-size: 12px;
+    padding: 7px 8px;
+  }
+
+  .quoteServiceRow {
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .quoteServiceRow strong {
+    grid-column: 1;
+  }
+
+  .quoteServiceRow .checkCell {
+    grid-column: 3;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+
+  .quoteServiceRow label:has(input[name^="quantity"]),
+  .quoteServiceRow label:has(input[type="number"]:disabled),
+  .quoteServiceRow .basePriceCell {
+    display: none;
+  }
+
+  .quoteServiceRow label:has(input[name="requiredUnitPrice"]),
+  .quoteServiceRow label:has(input[name^="unitPrice:"]) {
+    grid-column: 2;
+    grid-row: 1;
+    width: 112px;
+  }
+
+  .quoteServiceRow label:has(input[name="requiredUnitPrice"]) .mobileOnly,
+  .quoteServiceRow label:has(input[name^="unitPrice:"]) .mobileOnly {
+    display: none;
+  }
+
+  .quoteServiceHeader {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: inline;
+  }
+
+  .quoteTotalizer {
+    align-items: flex-start;
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .depositStatusCard {
+    grid-template-columns: 1fr;
+  }
+
+  .eventInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .publicQuotePage {
+    padding: 14px;
+  }
+
+  .publicQuoteHeader,
+  .publicQuoteBody {
+    grid-template-columns: 1fr;
+  }
+
+  .publicTotalsPanel {
+    order: -1;
+  }
+
+  .publicItemsTable {
+    min-width: 0;
+  }
+
+  .publicQuoteHeader {
+    display: grid;
+    padding: 20px;
+  }
+
+  .publicSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .publicSummaryGrid div:nth-child(2n) {
+    border-right: 0;
+  }
+}

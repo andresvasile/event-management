@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventStatus {
+  CONSULTA
+  COTIZADO
+  ACEPTADO
+  RESERVADO
+  CONFIRMADO
+  CANCELADO
+  FINALIZADO
+}
+
+enum QuoteStatus {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  VENCIDA
+  CANCELADA
+}
+
+enum Turn {
+  MANANA
+  TARDE
+  NOCHE
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+}
+
+enum UserRole {
+  DUENIO
+  PERSONAL_OPERATIVO
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(PERSONAL_OPERATIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  events    Event[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EventType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  events    Event[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  clientId    String
+  eventTypeId String?
+  date        DateTime    @db.Date
+  turn        Turn
+  status      EventStatus @default(CONSULTA)
+  guests      Int
+  notes       String?
+  client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  eventType   EventType?  @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  quotes      Quote[]
+  payments    Payment[]
+  reminders   Reminder[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([date, turn])
+}
+
+model Service {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  basePrice Int?
+  active    Boolean     @default(true)
+  required  Boolean     @default(false)
+  items     QuoteItem[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model Quote {
+  id              String       @id @default(cuid())
+  eventId         String
+  status          QuoteStatus  @default(BORRADOR)
+  token           String       @unique
+  expiresAt       DateTime     @db.Date
+  requiredDeposit Int
+  conditions      String
+  event           Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  items           QuoteItem[]
+  payments        Payment[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([eventId])
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  serviceId   String?
+  serviceName String
+  quantity    Int
+  unitPrice   Int
+  required    Boolean @default(false)
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  service     Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  eventId   String
+  quoteId   String
+  amount    Int
+  method    PaymentMethod
+  paidAt    DateTime      @db.Date
+  note      String?
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  quote     Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  eventId   String
+  title     String
+  dueDate   DateTime @db.Date
+  done      Boolean  @default(false)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
