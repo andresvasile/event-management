@@ -59,7 +59,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 3. El servicio `migrate` espera a PostgreSQL, crea/actualiza tablas con Prisma y carga datos iniciales antes de iniciar la app.
 
-4. La app queda expuesta en `APP_PORT`.
+4. La app queda expuesta en `APP_PORT` (`3001` por defecto).
 
 ## Alcance MVP
 
