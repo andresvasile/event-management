@@ -69,6 +69,18 @@ docker compose -f docker-compose.prod.yml run --rm \
 
 5. La app queda expuesta en el puerto `3001` del VPS. `BETTER_AUTH_URL` debe contener la URL pública exacta y `BETTER_AUTH_SECRET` debe ser un valor aleatorio de al menos 32 caracteres.
 
+### Error P1000 despues de cambiar la contrasena
+
+PostgreSQL solo usa `POSTGRES_PASSWORD` al crear el volumen por primera vez. Si `postgres_data` ya existe, cambiar esa variable en `.env` no cambia la contrasena del usuario dentro de la base. Para conservar los datos, actualizar el rol con la contrasena nueva y volver a crear los servicios:
+
+```bash
+docker compose -f docker-compose.prod.yml exec db \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\password $POSTGRES_USER"'
+docker compose -f docker-compose.prod.yml up -d --build --force-recreate
+```
+
+Cuando `psql` la solicite, ingresar el mismo valor configurado en `POSTGRES_PASSWORD`. Evitar caracteres reservados de URL (`@`, `:`, `/`, `?`, `#`, `%`) o codificarlos antes de incluirlos en una URL. No ejecutar `docker compose down -v`: elimina la base de datos.
+
 Si una base existente fue creada anteriormente con `prisma db push`, se debe verificar contra la migracion inicial y marcar esa migracion como aplicada antes del primer `migrate deploy`. Hacer backup y no ejecutar la migracion inicial directamente sobre tablas existentes.
 
 ## Alcance MVP
