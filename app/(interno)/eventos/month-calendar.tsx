@@ -7,6 +7,7 @@ import {
   formatCurrency,
   formatDate,
   formatMonth,
+  formatTurn,
   hasBlockingConflict,
   interestedCount,
   paidTotal,
@@ -50,7 +51,7 @@ function getThreeDays(value: Date) {
 }
 
 export function MonthCalendar({ events, clients, payments, quotes }: MonthCalendarProps) {
-  const [monthDate, setMonthDate] = useState(() => new Date(2026, 9, 1));
+  const [monthDate, setMonthDate] = useState(() => new Date());
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const visibleDays = calendarView === "month" ? getMonthDays(monthDate) : calendarView === "week" ? getWeekDays(monthDate) : getThreeDays(monthDate);
@@ -58,6 +59,7 @@ export function MonthCalendar({ events, clients, payments, quotes }: MonthCalend
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const selectedClient = selectedEvent ? clients.find((client) => client.id === selectedEvent.clientId) : undefined;
   const selectedQuote = selectedEvent ? quotes.find((quote) => quote.eventId === selectedEvent.id) : undefined;
+  const monthStartColumn = ((new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay() + 6) % 7) + 1;
 
   function moveMonth(offset: number) {
     setMonthDate((current) => {
@@ -79,6 +81,14 @@ export function MonthCalendar({ events, clients, payments, quotes }: MonthCalend
     setMonthDate(new Date(year, month - 1, 1));
   }
 
+  function selectView(view: CalendarView) {
+    setCalendarView(view);
+
+    if (view === "threeDays") {
+      setMonthDate(new Date());
+    }
+  }
+
   function clientName(clientId: string) {
     return clients.find((client) => client.id === clientId)?.name ?? "Cliente sin nombre";
   }
@@ -89,28 +99,28 @@ export function MonthCalendar({ events, clients, payments, quotes }: MonthCalend
         <h2>Calendario {formatMonth(monthDate)}</h2>
         <div className="calendarControls">
           <div className="calendarViewToggle" aria-label="Vista del calendario">
-            <button className={`button ${calendarView === "month" ? "primary" : ""}`} onClick={() => setCalendarView("month")} type="button">
+            <button className={`button ${calendarView === "month" ? "primary" : ""}`} onClick={() => selectView("month")} type="button">
               Mes
             </button>
-            <button className={`button ${calendarView === "week" ? "primary" : ""}`} onClick={() => setCalendarView("week")} type="button">
+            <button className={`button ${calendarView === "week" ? "primary" : ""}`} onClick={() => selectView("week")} type="button">
               Semana
             </button>
-            <button className={`button ${calendarView === "threeDays" ? "primary" : ""}`} onClick={() => setCalendarView("threeDays")} type="button">
+            <button className={`button ${calendarView === "threeDays" ? "primary" : ""}`} onClick={() => selectView("threeDays")} type="button">
               3 días
             </button>
           </div>
-          <button aria-label="Mes anterior" className="button iconButton" onClick={() => moveMonth(-1)} type="button">
+          <button aria-label="Período anterior" className="button iconButton" onClick={() => moveMonth(-1)} type="button">
             &lt;
           </button>
           <div className="field compactField">
             <label htmlFor="calendarMonth">Mes y año</label>
             <input id="calendarMonth" onChange={(event) => selectMonth(event.target.value)} type="month" value={selectedMonth} />
           </div>
-          <button aria-label="Mes siguiente" className="button iconButton" onClick={() => moveMonth(1)} type="button">
+          <button aria-label="Período siguiente" className="button iconButton" onClick={() => moveMonth(1)} type="button">
             &gt;
           </button>
-          <button className="button" onClick={() => setMonthDate(new Date(2026, 9, 1))} type="button">
-            Mes actual
+          <button className="button" onClick={() => setMonthDate(new Date())} type="button">
+            Hoy
           </button>
         </div>
       </div>
@@ -119,7 +129,11 @@ export function MonthCalendar({ events, clients, payments, quotes }: MonthCalend
           const dayEvents = events.filter((event) => event.date === date);
 
           return (
-            <article className="dayCell" key={date}>
+            <article
+              className="dayCell"
+              key={date}
+              style={calendarView === "month" && date === visibleDays[0] ? { gridColumnStart: monthStartColumn } : undefined}
+            >
               <header>{formatDate(date)}</header>
               {dayEvents.map((event) => {
                 const interested = interestedCount(event, events);
@@ -128,7 +142,7 @@ export function MonthCalendar({ events, clients, payments, quotes }: MonthCalend
                 return (
                   <button className={`eventPill eventButton status${event.status}`} key={event.id} onClick={() => setSelectedEventId(event.id)} type="button">
                     <strong>
-                      {event.turn} - {clientName(event.clientId)}
+                      {formatTurn(event.turn)} - {clientName(event.clientId)}
                     </strong>
                     <span>{event.status}</span>
                     {interested > 0 ? <span>Advertencia: {interested} interesado(s)</span> : null}
@@ -148,12 +162,13 @@ export function MonthCalendar({ events, clients, payments, quotes }: MonthCalend
               <div>
                 <h2>Detalle del evento</h2>
                 <p className="muted">
-                  {selectedClient?.name} - {formatDate(selectedEvent.date)} - {selectedEvent.turn}
+                  {selectedClient?.name} - {formatDate(selectedEvent.date)} - {formatTurn(selectedEvent.turn)}
                 </p>
               </div>
-              <button className="button" onClick={() => setSelectedEventId(null)} type="button">
-                Cerrar
-              </button>
+              <div className="buttonRow">
+                <Link className="button primary" href={`/eventos/${selectedEvent.id}`}>Abrir evento</Link>
+                <button className="button" onClick={() => setSelectedEventId(null)} type="button">Cerrar</button>
+              </div>
             </div>
             <div className="panelBody eventModalBody">
               <section className="eventInfoGrid" aria-label="Información del evento">

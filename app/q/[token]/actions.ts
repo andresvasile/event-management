@@ -1,7 +1,9 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { acceptQuote, rejectQuote } from "@/lib/quote-workflow";
 
 export async function acceptPublicQuote(formData: FormData) {
   const token = String(formData.get("token") ?? "");
@@ -10,19 +12,12 @@ export async function acceptPublicQuote(formData: FormData) {
     return;
   }
 
-  const quote = await prisma.quote.findUnique({
-    where: { token },
-    include: { event: true },
-  });
-
-  if (!quote || quote.status === "CANCELADA" || quote.status === "VENCIDA") {
+  try {
+    await prisma.$transaction((tx) => acceptQuote(tx, { token }), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  } catch {
     return;
-  }
-
-  await prisma.quote.update({ where: { id: quote.id }, data: { status: "ACEPTADA" } });
-
-  if (quote.event.status !== "RESERVADO" && quote.event.status !== "CONFIRMADO") {
-    await prisma.event.update({ where: { id: quote.eventId }, data: { status: "ACEPTADO" } });
   }
 
   revalidatePath(`/q/${token}`);
@@ -38,13 +33,13 @@ export async function rejectPublicQuote(formData: FormData) {
     return;
   }
 
-  const quote = await prisma.quote.findUnique({ where: { token } });
-
-  if (!quote || quote.status === "CANCELADA" || quote.status === "VENCIDA") {
+  try {
+    await prisma.$transaction((tx) => rejectQuote(tx, token), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  } catch {
     return;
   }
-
-  await prisma.quote.update({ where: { id: quote.id }, data: { status: "RECHAZADA" } });
 
   revalidatePath(`/q/${token}`);
   revalidatePath("/cotizaciones");

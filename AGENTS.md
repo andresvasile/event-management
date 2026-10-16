@@ -2,6 +2,8 @@
 
 Este proyecto es una web app de gestion para un salon de eventos. Antes de implementar, mantener el foco en el MVP definido en `README.md`.
 
+Leer tambien `IMPLEMENTATION_PLAN.md`, que registra las decisiones funcionales nuevas, el estado actual y la secuencia de continuidad.
+
 ## Prioridades
 
 1. Gestionar calendario, eventos y turnos sin conflictos reales de reserva.

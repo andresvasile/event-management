@@ -2,8 +2,8 @@ import type { Client, Event, EventType, Payment, Quote, Service } from "./domain
 import { toDateKey } from "./domain";
 import { prisma } from "./prisma";
 
-export async function getClients(): Promise<Client[]> {
-  const clients = await prisma.client.findMany({ orderBy: { name: "asc" } });
+export async function getClients(organizationId: string): Promise<Client[]> {
+  const clients = await prisma.client.findMany({ where: { organizationId }, orderBy: { name: "asc" } });
 
   return clients.map((client) => ({
     id: client.id,
@@ -12,18 +12,20 @@ export async function getClients(): Promise<Client[]> {
   }));
 }
 
-export async function getEventTypes(): Promise<EventType[]> {
-  const eventTypes = await prisma.eventType.findMany({ orderBy: { name: "asc" } });
+export async function getEventTypes(organizationId: string): Promise<EventType[]> {
+  const eventTypes = await prisma.eventType.findMany({ where: { organizationId }, orderBy: { name: "asc" } });
 
   return eventTypes.map((eventType) => ({
     id: eventType.id,
     name: eventType.name,
     active: eventType.active,
+    supportsGraduationRoster: eventType.supportsGraduationRoster,
   }));
 }
 
-export async function getEvents(): Promise<Event[]> {
+export async function getEvents(organizationId: string): Promise<Event[]> {
   const events = await prisma.event.findMany({
+    where: { organizationId },
     include: { eventType: true },
     orderBy: [{ date: "asc" }, { turn: "asc" }],
   });
@@ -35,13 +37,14 @@ export async function getEvents(): Promise<Event[]> {
     turn: event.turn,
     status: event.status,
     eventType: event.eventType?.name ?? "Otro",
+    supportsGraduationRoster: event.eventType?.supportsGraduationRoster ?? false,
     guests: event.guests,
     notes: event.notes ?? undefined,
   }));
 }
 
-export async function getServices(): Promise<Service[]> {
-  const services = await prisma.service.findMany({ orderBy: [{ required: "desc" }, { name: "asc" }] });
+export async function getServices(organizationId: string): Promise<Service[]> {
+  const services = await prisma.service.findMany({ where: { organizationId }, orderBy: [{ required: "desc" }, { name: "asc" }] });
 
   return services.map((service) => ({
     id: service.id,
@@ -52,8 +55,9 @@ export async function getServices(): Promise<Service[]> {
   }));
 }
 
-export async function getQuotes(): Promise<Quote[]> {
+export async function getQuotes(organizationId: string): Promise<Quote[]> {
   const quotes = await prisma.quote.findMany({
+    where: { event: { organizationId } },
     include: { items: { orderBy: { serviceName: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
@@ -104,8 +108,8 @@ export async function getQuoteByToken(token: string): Promise<Quote | null> {
   };
 }
 
-export async function getPayments(): Promise<Payment[]> {
-  const payments = await prisma.payment.findMany({ orderBy: { paidAt: "desc" } });
+export async function getPayments(organizationId: string): Promise<Payment[]> {
+  const payments = await prisma.payment.findMany({ where: { event: { organizationId } }, orderBy: { paidAt: "desc" } });
 
   return payments.map((payment) => ({
     id: payment.id,

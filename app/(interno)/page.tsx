@@ -1,21 +1,81 @@
 import Link from "next/link";
-import { formatCurrency, formatDate, interestedCount, paidTotal, pendingBalance, quoteTotal } from "@/lib/domain";
-import { getClients, getEvents, getPayments, getQuotes } from "@/lib/data";
+import { formatCurrency, formatDate, formatTurn, toDateKey } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
+import { PAGE_SIZE, parsePage } from "@/lib/pagination";
+import { Pagination } from "./pagination";
+import { requireOrganization } from "@/lib/auth-guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
-  const [clients, events, payments, quotes] = await Promise.all([getClients(), getEvents(), getPayments(), getQuotes()]);
-  const upcomingEvents = [...events].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
-  const pendingDepositQuotes = quotes.filter(
-    (quote) => quote.status === "ACEPTADA" && paidTotal(quote.eventId, payments) < quote.requiredDeposit,
-  );
-  const quotedTotal = quotes.reduce((total, quote) => total + quoteTotal(quote), 0);
-  const paid = payments.reduce((total, payment) => total + payment.amount, 0);
+type DashboardPageProps = { searchParams: Promise<{ balancePage?: string; depositPage?: string }> };
+type DepositRow = { id: string; eventId: string; clientName: string; date: Date; turn: string; paid: number; missing: number };
+type BalanceRow = { id: string; clientName: string; status: string; token: string; total: number; paid: number; balance: number };
 
-  function getClient(clientId: string) {
-    return clients.find((client) => client.id === clientId);
-  }
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const { organizationId } = await requireOrganization();
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [activeEvents, quotedRows, paymentTotal, upcomingEvents, depositCountRows, balanceCount] = await Promise.all([
+    prisma.event.count({ where: { organizationId, status: { notIn: ["CANCELADO", "FINALIZADO"] } } }),
+    prisma.$queryRaw<Array<{ total: number }>>`
+      SELECT COALESCE(SUM(i."quantity" * i."unitPrice"), 0)::integer AS total
+      FROM "QuoteItem" i JOIN "Quote" q ON q."id" = i."quoteId" JOIN "Event" e ON e."id" = q."eventId"
+      WHERE e."organizationId" = ${organizationId}
+    `,
+    prisma.payment.aggregate({ where: { event: { organizationId } }, _sum: { amount: true } }),
+    prisma.event.findMany({
+      where: { organizationId, date: { gte: today }, status: { notIn: ["CANCELADO", "FINALIZADO"] } },
+      include: { client: true },
+      orderBy: [{ date: "asc" }, { turn: "asc" }],
+      take: 5,
+    }),
+    prisma.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::integer AS count
+      FROM "Quote" q
+      JOIN "Event" e ON e."id" = q."eventId"
+      WHERE q."status" = 'ACEPTADA'
+        AND e."organizationId" = ${organizationId}
+        AND COALESCE((SELECT SUM(p."amount") FROM "Payment" p WHERE p."quoteId" = q."id"), 0) < q."requiredDeposit"
+    `,
+    prisma.quote.count({ where: { event: { organizationId } } }),
+  ]);
+  const depositCount = depositCountRows[0]?.count ?? 0;
+  const depositPage = Math.min(parsePage(params.depositPage), Math.max(1, Math.ceil(depositCount / PAGE_SIZE)));
+  const balancePage = Math.min(parsePage(params.balancePage), Math.max(1, Math.ceil(balanceCount / PAGE_SIZE)));
+  const [pendingDepositQuotes, balances, interestedCounts] = await Promise.all([
+    prisma.$queryRaw<DepositRow[]>`
+      SELECT q."id", e."id" AS "eventId", c."name" AS "clientName", e."date", e."turn"::text,
+        COALESCE((SELECT SUM(p."amount") FROM "Payment" p WHERE p."quoteId" = q."id"), 0)::integer AS paid,
+        (q."requiredDeposit" - COALESCE((SELECT SUM(p."amount") FROM "Payment" p WHERE p."quoteId" = q."id"), 0))::integer AS missing
+      FROM "Quote" q
+      JOIN "Event" e ON e."id" = q."eventId"
+      JOIN "Client" c ON c."id" = e."clientId"
+      WHERE q."status" = 'ACEPTADA'
+        AND e."organizationId" = ${organizationId}
+        AND COALESCE((SELECT SUM(p."amount") FROM "Payment" p WHERE p."quoteId" = q."id"), 0) < q."requiredDeposit"
+      ORDER BY e."date" ASC, e."turn" ASC, q."id" ASC
+      LIMIT ${PAGE_SIZE} OFFSET ${(depositPage - 1) * PAGE_SIZE}
+    `,
+    prisma.$queryRaw<BalanceRow[]>`
+      SELECT q."id", c."name" AS "clientName", q."status"::text, q."token",
+        COALESCE((SELECT SUM(i."quantity" * i."unitPrice") FROM "QuoteItem" i WHERE i."quoteId" = q."id"), 0)::integer AS total,
+        COALESCE((SELECT SUM(p."amount") FROM "Payment" p WHERE p."quoteId" = q."id"), 0)::integer AS paid,
+        (COALESCE((SELECT SUM(i."quantity" * i."unitPrice") FROM "QuoteItem" i WHERE i."quoteId" = q."id"), 0) -
+         COALESCE((SELECT SUM(p."amount") FROM "Payment" p WHERE p."quoteId" = q."id"), 0))::integer AS balance
+      FROM "Quote" q
+      JOIN "Event" e ON e."id" = q."eventId"
+      JOIN "Client" c ON c."id" = e."clientId"
+      WHERE e."organizationId" = ${organizationId}
+      ORDER BY e."date" DESC, q."createdAt" DESC, q."id" DESC
+      LIMIT ${PAGE_SIZE} OFFSET ${(balancePage - 1) * PAGE_SIZE}
+    `,
+    Promise.all(upcomingEvents.map((event) => prisma.event.count({
+      where: { organizationId, id: { not: event.id }, date: event.date, turn: event.turn, status: { notIn: ["CANCELADO", "FINALIZADO"] } },
+    }))),
+  ]);
+  const quotedTotal = quotedRows[0]?.total ?? 0;
+  const paid = paymentTotal._sum.amount ?? 0;
 
   return (
     <>
@@ -28,8 +88,8 @@ export default async function DashboardPage() {
           <Link className="button primary" href="/eventos">
             Nuevo evento
           </Link>
-          <Link className="button" href="/cotizaciones">
-            Ver cotizaciones
+          <Link className="button" href="/eventos">
+            Seleccionar evento
           </Link>
         </div>
       </header>
@@ -37,7 +97,7 @@ export default async function DashboardPage() {
       <section className="grid columns3" aria-label="Indicadores principales">
         <article className="panel panelBody metric">
           <span>Eventos activos</span>
-          <strong>{events.filter((event) => event.status !== "CANCELADO" && event.status !== "FINALIZADO").length}</strong>
+          <strong>{activeEvents}</strong>
         </article>
         <article className="panel panelBody metric">
           <span>Cotizado</span>
@@ -69,15 +129,13 @@ export default async function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {upcomingEvents.map((event) => {
-                  const client = getClient(event.clientId);
-                  const interested = interestedCount(event, events);
-
+                {upcomingEvents.map((event, index) => {
+                  const interested = interestedCounts[index] ?? 0;
                   return (
                     <tr key={event.id}>
-                      <td data-label="Fecha">{formatDate(event.date)}</td>
-                      <td data-label="Turno">{event.turn}</td>
-                      <td data-label="Cliente">{client?.name}</td>
+                      <td data-label="Fecha">{formatDate(toDateKey(event.date))}</td>
+                      <td data-label="Turno">{formatTurn(event.turn)}</td>
+                      <td data-label="Cliente">{event.client.name}</td>
                       <td data-label="Estado">
                         <span className={`badge status${event.status}`}>{event.status}</span>
                       </td>
@@ -96,23 +154,19 @@ export default async function DashboardPage() {
           </div>
           <div className="panelBody grid">
             {pendingDepositQuotes.map((quote) => {
-              const event = events.find((item) => item.id === quote.eventId);
-              const client = event ? getClient(event.clientId) : undefined;
-              const paidForEvent = event ? paidTotal(event.id, payments) : 0;
-              const missingDeposit = quote.requiredDeposit - paidForEvent;
-
               return (
                 <div className="warningBox" key={quote.id}>
-                  <strong>{client?.name}</strong>
-                  <div>{event ? `${formatDate(event.date)} - ${event.turn}` : "Evento no encontrado"}</div>
+                  <strong>{quote.clientName}</strong>
+                  <div>{formatDate(toDateKey(quote.date))} - {formatTurn(quote.turn)}</div>
                   <div>
-                    Faltan {formatCurrency(missingDeposit)} para cubrir la seña. Registrado: {formatCurrency(paidForEvent)}.
+                    Faltan {formatCurrency(quote.missing)} para cubrir la seña. Registrado: {formatCurrency(quote.paid)}.
                   </div>
                 </div>
               );
             })}
             {pendingDepositQuotes.length === 0 ? <p className="muted">No hay señas pendientes.</p> : null}
           </div>
+          <Pagination page={depositPage} pageParam="depositPage" pageSize={PAGE_SIZE} pathname="/" searchParams={{ balancePage: params.balancePage }} totalItems={depositCount} />
         </article>
       </section>
 
@@ -133,19 +187,16 @@ export default async function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {quotes.map((quote) => {
-                const event = events.find((item) => item.id === quote.eventId);
-                const client = event ? clients.find((item) => item.id === event.clientId) : undefined;
-
+              {balances.map((quote) => {
                 return (
                   <tr key={quote.id}>
-                    <td data-label="Cliente">{client?.name}</td>
+                    <td data-label="Cliente">{quote.clientName}</td>
                     <td data-label="Estado">
                       <span className={`badge status${quote.status}`}>{quote.status}</span>
                     </td>
-                    <td data-label="Total">{formatCurrency(quoteTotal(quote))}</td>
-                    <td data-label="Pagado">{formatCurrency(paidTotal(quote.eventId, payments))}</td>
-                    <td data-label="Saldo">{formatCurrency(pendingBalance(quote, payments))}</td>
+                    <td data-label="Total">{formatCurrency(quote.total)}</td>
+                    <td data-label="Pagado">{formatCurrency(quote.paid)}</td>
+                    <td data-label="Saldo">{formatCurrency(quote.balance)}</td>
                     <td data-label="Link">
                       <Link href={`/q/${quote.token}`}>Ver pública</Link>
                     </td>
@@ -155,6 +206,7 @@ export default async function DashboardPage() {
             </tbody>
           </table>
         </div>
+        <Pagination page={balancePage} pageParam="balancePage" pageSize={PAGE_SIZE} pathname="/" searchParams={{ depositPage: params.depositPage }} totalItems={balanceCount} />
       </section>
     </>
   );

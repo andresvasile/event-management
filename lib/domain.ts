@@ -29,6 +29,7 @@ export type Event = {
   turn: Turn;
   status: EventStatus;
   eventType: string;
+  supportsGraduationRoster?: boolean;
   guests: number;
   notes?: string;
 };
@@ -45,6 +46,7 @@ export type EventType = {
   id: string;
   name: string;
   active: boolean;
+  supportsGraduationRoster?: boolean;
 };
 
 export type QuoteItem = {
@@ -90,6 +92,13 @@ export function formatDate(value: string) {
   );
 }
 
+export function formatTurn(value: string) {
+  if (value === "MANANA") return "Mañana";
+  if (value === "TARDE") return "Tarde";
+  if (value === "NOCHE") return "Noche";
+  return value;
+}
+
 export function formatMonth(value: Date) {
   return new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" }).format(value);
 }
@@ -100,6 +109,15 @@ export function toDateKey(value: Date) {
   const day = String(value.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+export function todayDateKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+  }).format(new Date());
 }
 
 export function quoteTotal(quote: Quote) {

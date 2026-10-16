@@ -1,131 +1,114 @@
-import { formatCurrency, formatDate, quoteTotal } from "@/lib/domain";
-import { getClients, getEvents, getPayments, getQuotes } from "@/lib/data";
+import { formatCurrency, formatDate, formatTurn } from "@/lib/domain";
+import { toDateKey } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
+import { PAGE_SIZE, parsePage } from "@/lib/pagination";
 import { createPayment } from "./actions";
 import { MoneyInput } from "../cotizaciones/money-input";
+import { EventWorkspaceNav } from "../eventos/event-workspace-nav";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Pagination } from "../pagination";
+import { requireOrganization } from "@/lib/auth-guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaymentsPage() {
-  const [clients, events, payments, quotes] = await Promise.all([getClients(), getEvents(), getPayments(), getQuotes()]);
-  const eventsWithQuote = events.filter((event) => quotes.some((quote) => quote.eventId === event.id));
-  const depositRows = quotes
-    .map((quote) => {
-      const event = events.find((item) => item.id === quote.eventId);
-      const client = event ? getClient(event.clientId) : undefined;
-      const paid = payments.filter((payment) => payment.quoteId === quote.id).reduce((total, payment) => total + payment.amount, 0);
-      const missingDeposit = Math.max(quote.requiredDeposit - paid, 0);
-      const total = quoteTotal(quote);
+type PaymentsPageProps = {
+  searchParams: Promise<{ error?: string; eventId?: string; page?: string }>;
+};
 
-      return {
-        clientName: client?.name ?? "Sin cliente",
-        event,
-        missingDeposit,
-        paid,
-        quote,
-        total,
-      };
-    })
-    .sort((a, b) => {
-      if (a.missingDeposit > 0 && b.missingDeposit === 0) {
-        return -1;
-      }
+const errorMessages: Record<string, string> = {
+  "quote-not-found": "Primero tenés que crear la cotización.",
+  "invalid-quote-status": "El estado actual de la cotización no permite registrar pagos.",
+  "invalid-event-status": "El estado actual del evento no permite registrar pagos.",
+  "payment-over-balance": "El pago no puede superar el saldo pendiente.",
+  "turn-unavailable": "El turno fue reservado por otro evento. No se registró el pago.",
+  "save-failed": "No se pudo registrar el pago. Intentá nuevamente.",
+};
 
-      if (a.missingDeposit === 0 && b.missingDeposit > 0) {
-        return 1;
-      }
+export default async function PaymentsPage({ searchParams }: PaymentsPageProps) {
+  const { error, eventId, page: requestedPage } = await searchParams;
+  const { organizationId } = await requireOrganization();
+  const selectedEvent = eventId
+    ? await prisma.event.findFirst({ where: { id: eventId, organizationId }, include: { client: true, eventType: true } })
+    : null;
 
-      return (a.event?.date ?? "").localeCompare(b.event?.date ?? "");
-    });
-  const pendingDeposits = depositRows.filter((row) => row.missingDeposit > 0);
-  const coveredDeposits = depositRows.filter((row) => row.missingDeposit === 0);
-
-  function getClient(clientId: string) {
-    return clients.find((client) => client.id === clientId);
+  if (!selectedEvent) {
+    redirect("/eventos");
   }
+
+  const quote = await prisma.quote.findUnique({ where: { eventId: selectedEvent.id }, include: { items: true } });
+  const [paymentCount, paymentTotal] = await Promise.all([
+    prisma.payment.count({ where: { eventId: selectedEvent.id } }),
+    prisma.payment.aggregate({ where: { eventId: selectedEvent.id }, _sum: { amount: true } }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(paymentCount / PAGE_SIZE));
+  const page = Math.min(parsePage(requestedPage), totalPages);
+  const eventPayments = await prisma.payment.findMany({
+    where: { eventId: selectedEvent.id },
+    orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+  const paid = paymentTotal._sum.amount ?? 0;
+  const total = quote ? quote.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) : 0;
+  const missingDeposit = quote ? Math.max(quote.requiredDeposit - paid, 0) : 0;
+  const canRegisterPayment = quote
+    ? (quote.status === "ENVIADA" && selectedEvent.status === "COTIZADO") ||
+      (quote.status === "ACEPTADA" && ["ACEPTADO", "RESERVADO", "CONFIRMADO"].includes(selectedEvent.status))
+    : false;
 
   return (
     <>
+      <EventWorkspaceNav
+        active="payments"
+        event={{
+          id: selectedEvent.id,
+          isGraduation: selectedEvent.eventType?.supportsGraduationRoster ?? false,
+          label: `${formatDate(toDateKey(selectedEvent.date))} - ${formatTurn(selectedEvent.turn)} - ${selectedEvent.client.name} - ${selectedEvent.eventType?.name ?? "Otro"}`,
+        }}
+      />
+
       <header className="pageHeader">
         <div>
           <h1>Pagos</h1>
-          <p>Seguimiento de señas pendientes, señas registradas y pagos por evento.</p>
+          <p>Seña, movimientos registrados y saldo pendiente.</p>
         </div>
-        <a className="button primary" href="#nuevo-pago">
-          Registrar pago
-        </a>
+        {canRegisterPayment ? <a className="button primary" href="#nuevo-pago">Registrar pago</a> : null}
       </header>
+
+      {error && errorMessages[error] ? <div className="warningBox" style={{ marginBottom: 16 }}>{errorMessages[error]}</div> : null}
 
       <section className="grid columns3" aria-label="Resumen de señas" style={{ marginBottom: 16 }}>
         <article className="panel panelBody metric">
-          <span>Señas pendientes</span>
-          <strong>{pendingDeposits.length}</strong>
+          <span>Seña requerida</span>
+          <strong>{formatCurrency(quote?.requiredDeposit ?? 0)}</strong>
         </article>
         <article className="panel panelBody metric">
-          <span>Señas cubiertas</span>
-          <strong>{coveredDeposits.length}</strong>
+          <span>Total pagado</span>
+          <strong>{formatCurrency(paid)}</strong>
         </article>
         <article className="panel panelBody metric">
-          <span>Monto pendiente de señas</span>
-          <strong>{formatCurrency(pendingDeposits.reduce((total, row) => total + row.missingDeposit, 0))}</strong>
+          <span>Saldo pendiente</span>
+          <strong>{formatCurrency(Math.max(total - paid, 0))}</strong>
         </article>
       </section>
 
-      <section className="panel" style={{ marginBottom: 16 }}>
-        <div className="panelHeader">
-          <h2>Estado de señas</h2>
-          <span className="muted">Pendientes primero</span>
+      {quote ? (
+        <div className={missingDeposit === 0 ? "noticeBox" : "warningBox"} style={{ marginBottom: 16 }}>
+          {missingDeposit === 0 ? "La seña está cubierta." : `Faltan ${formatCurrency(missingDeposit)} para cubrir la seña.`}
         </div>
-        <div className="depositStatusList">
-          {depositRows.map((row) => (
-            <article className={`depositStatusCard ${row.missingDeposit === 0 ? "isCovered" : "isPending"}`} key={row.quote.id}>
-              <div>
-                <strong>{row.clientName}</strong>
-                <p className="muted">{row.event ? `${formatDate(row.event.date)} - ${row.event.turn}` : "Evento no encontrado"}</p>
-              </div>
-              <div>
-                <span>Seña requerida</span>
-                <strong>{formatCurrency(row.quote.requiredDeposit)}</strong>
-              </div>
-              <div>
-                <span>Registrado</span>
-                <strong>{formatCurrency(row.paid)}</strong>
-              </div>
-              <div>
-                <span>Total cotizado</span>
-                <strong>{formatCurrency(row.total)}</strong>
-              </div>
-              <div>
-                <span>Estado</span>
-                {row.missingDeposit === 0 ? (
-                  <strong className="statusText success">Seña cubierta</strong>
-                ) : (
-                  <strong className="statusText warning">Faltan {formatCurrency(row.missingDeposit)}</strong>
-                )}
-              </div>
-            </article>
-          ))}
-          {depositRows.length === 0 ? <p className="muted serviceEmptyState">Todavía no hay cotizaciones para seguir señas.</p> : null}
+      ) : (
+        <div className="warningBox" style={{ marginBottom: 16 }}>
+          Primero tenés que crear la cotización. <Link href={`/cotizaciones?eventId=${selectedEvent.id}`}>Ir a Cotización</Link>
         </div>
-      </section>
+      )}
 
-      <section className="panel" id="nuevo-pago" style={{ marginBottom: 16 }}>
+      {canRegisterPayment ? <section className="panel" id="nuevo-pago" style={{ marginBottom: 16 }}>
         <div className="panelHeader">
           <h2>Nuevo pago</h2>
         </div>
         <form action={createPayment} className="panelBody formGrid">
-          <div className="field">
-            <label htmlFor="event">Evento</label>
-            <select id="event" name="eventId">
-              {eventsWithQuote.map((event) => {
-                const client = getClient(event.clientId);
-                return (
-                  <option key={event.id} value={event.id}>
-                    {formatDate(event.date)} - {event.turn} - {client?.name}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          <input name="eventId" type="hidden" value={selectedEvent.id} />
           <div className="field">
             <label htmlFor="amount">Monto</label>
             <MoneyInput id="amount" name="amount" placeholder="Ej: 100.000" />
@@ -151,40 +134,34 @@ export default async function PaymentsPage() {
             </button>
           </div>
         </form>
-      </section>
+      </section> : null}
 
       <section className="panel">
+        <div className="panelHeader"><h2>Historial de pagos</h2></div>
         <div className="tableWrap">
           <table className="responsiveTable">
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Evento</th>
                 <th>Medio</th>
                 <th>Monto</th>
                 <th>Observación</th>
               </tr>
             </thead>
             <tbody>
-              {payments.map((payment) => {
-                const event = events.find((item) => item.id === payment.eventId);
-                const client = event ? getClient(event.clientId) : undefined;
-
-                return (
+              {eventPayments.map((payment) => (
                   <tr key={payment.id}>
-                    <td data-label="Fecha">{formatDate(payment.paidAt)}</td>
-                    <td data-label="Cliente">{client?.name}</td>
-                    <td data-label="Evento">{event ? `${formatDate(event.date)} - ${event.turn}` : "Sin evento"}</td>
+                    <td data-label="Fecha">{formatDate(toDateKey(payment.paidAt))}</td>
                     <td data-label="Medio">{payment.method}</td>
                     <td data-label="Monto">{formatCurrency(payment.amount)}</td>
                     <td data-label="Observación">{payment.note}</td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
+        {eventPayments.length === 0 ? <p className="muted serviceEmptyState">Todavía no hay pagos registrados.</p> : null}
+        <Pagination page={page} pageParam="page" pageSize={PAGE_SIZE} pathname="/pagos" searchParams={{ eventId: selectedEvent.id }} totalItems={paymentCount} />
       </section>
     </>
   );

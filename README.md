@@ -34,10 +34,10 @@ cp .env.example .env
 docker compose up -d
 ```
 
-4. Crear tablas y cargar datos iniciales:
+4. Aplicar las migraciones y cargar datos iniciales:
 
 ```bash
-npm run db:push
+npm run db:migrate
 npm run db:seed
 ```
 
@@ -57,9 +57,19 @@ npm run dev
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-3. El servicio `migrate` espera a PostgreSQL, crea/actualiza tablas con Prisma y carga datos iniciales antes de iniciar la app.
+3. El servicio `migrate` espera a PostgreSQL y aplica las migraciones versionadas con `prisma migrate deploy` antes de iniciar la app. Los datos demostrativos no se cargan en producción.
 
-4. La app queda expuesta en el puerto `3001` del VPS.
+4. Crear o actualizar la cuenta inicial del superadmin usando las variables `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` y `SUPERADMIN_NAME` del archivo `.env`:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm \
+  --env-from-file .env \
+  app npm run db:bootstrap-admin
+```
+
+5. La app queda expuesta en el puerto `3001` del VPS. `BETTER_AUTH_URL` debe contener la URL pública exacta y `BETTER_AUTH_SECRET` debe ser un valor aleatorio de al menos 32 caracteres.
+
+Si una base existente fue creada anteriormente con `prisma db push`, se debe verificar contra la migracion inicial y marcar esa migracion como aplicada antes del primer `migrate deploy`. Hacer backup y no ejecutar la migracion inicial directamente sobre tablas existentes.
 
 ## Alcance MVP
 
@@ -199,12 +209,15 @@ Los servicios deben poder crearse, editarse, activarse y desactivarse. El precio
 
 ## Usuarios
 
-Roles iniciales:
+El superadmin crea cada salón desde `/superadmin` y comparte invitaciones privadas. El registro público está deshabilitado: una cuenta nueva solo puede crearse desde una invitación vigente.
+
+Roles iniciales por salón:
 
 - Duenio.
+- Administrador.
 - Personal operativo.
 
-En el MVP ambos roles tienen permisos completos. Los permisos finos pueden agregarse despues.
+En el MVP los tres roles tienen permisos operativos completos. Los permisos finos pueden agregarse despues. El rol global de superadmin queda separado de los roles de cada salón.
 
 ## Recordatorios
 

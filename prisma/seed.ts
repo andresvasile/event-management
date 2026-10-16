@@ -3,44 +3,64 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.user.upsert({
-    where: { email: "duenio@salon.local" },
-    update: {},
-    create: {
-      id: "usr-1",
-      name: "Dueño",
-      email: "duenio@salon.local",
-      role: "DUENIO",
-    },
+  const email = process.env.SUPERADMIN_EMAIL;
+  const password = process.env.SUPERADMIN_PASSWORD;
+  const name = process.env.SUPERADMIN_NAME ?? "Superadmin";
+  if (!email || !password) throw new Error("SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD son obligatorios para el seed local.");
+
+  process.env.AUTH_BOOTSTRAP = "true";
+  const { auth } = await import("../lib/auth-core");
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    await auth.api.signUpEmail({ body: { email, password, name } });
+    user = await prisma.user.findUniqueOrThrow({ where: { email: email.toLowerCase() } });
+  }
+  await prisma.user.update({ where: { id: user.id }, data: { role: "admin", emailVerified: true } });
+
+  const organizationId = "org-demo";
+  await prisma.organization.upsert({
+    where: { slug: "salon-demo" },
+    update: { name: "Salón Demo" },
+    create: { id: organizationId, name: "Salón Demo", slug: "salon-demo", createdAt: new Date() },
+  });
+  await prisma.member.upsert({
+    where: { id: "member-superadmin-demo" },
+    update: { role: "owner" },
+    create: { id: "member-superadmin-demo", organizationId, userId: user.id, role: "owner", createdAt: new Date() },
   });
 
-  const eventTypes = ["Cumple", "Casamiento", "Egreso", "Otro"];
+  const eventTypes = [
+    { name: "Cumple", supportsGraduationRoster: false },
+    { name: "Casamiento", supportsGraduationRoster: false },
+    { name: "Egreso", supportsGraduationRoster: true },
+    { name: "Otro", supportsGraduationRoster: false },
+  ];
 
-  for (const [index, name] of eventTypes.entries()) {
+  for (const [index, eventType] of eventTypes.entries()) {
     await prisma.eventType.upsert({
-      where: { name },
-      update: { active: true },
-      create: { id: `etype-${index + 1}`, name, active: true },
+      where: { organizationId_name: { organizationId, name: eventType.name } },
+      update: { active: true, supportsGraduationRoster: eventType.supportsGraduationRoster },
+      create: { id: `etype-${index + 1}`, organizationId, name: eventType.name, active: true, supportsGraduationRoster: eventType.supportsGraduationRoster },
     });
   }
 
   await prisma.client.createMany({
     data: [
-      { id: "cli-1", name: "Camila Álvarez", phone: "5491123456789" },
-      { id: "cli-2", name: "Martín Rivas", phone: "5491165432100" },
-      { id: "cli-3", name: "Laura Gómez", phone: "5491130303030" },
-      { id: "cli-4", name: "Sofía Pereyra", phone: "5491177778888" },
+      { id: "cli-1", organizationId, name: "Camila Álvarez", phone: "5491123456789" },
+      { id: "cli-2", organizationId, name: "Martín Rivas", phone: "5491165432100" },
+      { id: "cli-3", organizationId, name: "Laura Gómez", phone: "5491130303030" },
+      { id: "cli-4", organizationId, name: "Sofía Pereyra", phone: "5491177778888" },
     ],
     skipDuplicates: true,
   });
 
   await prisma.service.createMany({
     data: [
-      { id: "srv-1", name: "Alquiler del salón", basePrice: 180000, active: true, required: true },
-      { id: "srv-2", name: "Catering", basePrice: 4500, active: true, required: false },
-      { id: "srv-3", name: "DJ", basePrice: 85000, active: true, required: false },
-      { id: "srv-4", name: "Decoración", basePrice: 65000, active: true, required: false },
-      { id: "srv-5", name: "Mozos", basePrice: 25000, active: true, required: false },
+      { id: "srv-1", organizationId, name: "Alquiler del salón", basePrice: 180000, active: true, required: true },
+      { id: "srv-2", organizationId, name: "Catering", basePrice: 4500, active: true, required: false },
+      { id: "srv-3", organizationId, name: "DJ", basePrice: 85000, active: true, required: false },
+      { id: "srv-4", organizationId, name: "Decoración", basePrice: 65000, active: true, required: false },
+      { id: "srv-5", organizationId, name: "Mozos", basePrice: 25000, active: true, required: false },
     ],
     skipDuplicates: true,
   });
@@ -49,6 +69,7 @@ async function main() {
     data: [
       {
         id: "evt-1",
+        organizationId,
         clientId: "cli-1",
         eventTypeId: "etype-1",
         date: new Date("2026-10-17T00:00:00"),
@@ -59,6 +80,7 @@ async function main() {
       },
       {
         id: "evt-2",
+        organizationId,
         clientId: "cli-2",
         eventTypeId: "etype-2",
         date: new Date("2026-10-17T00:00:00"),
@@ -68,6 +90,7 @@ async function main() {
       },
       {
         id: "evt-3",
+        organizationId,
         clientId: "cli-3",
         eventTypeId: "etype-4",
         date: new Date("2026-10-24T00:00:00"),
@@ -77,6 +100,7 @@ async function main() {
       },
       {
         id: "evt-4",
+        organizationId,
         clientId: "cli-4",
         eventTypeId: "etype-3",
         date: new Date("2026-10-31T00:00:00"),

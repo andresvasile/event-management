@@ -1,20 +1,15 @@
 "use server";
 
+import { randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-
-function slug(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
+import { acceptQuote, WorkflowError } from "@/lib/quote-workflow";
+import { requireOrganization } from "@/lib/auth-guards";
 
 function isValidMoney(value: number) {
-  return Number.isFinite(value) && value >= 0;
+  return Number.isInteger(value) && value >= 0;
 }
 
 function moneyValue(formData: FormData, name: string) {
@@ -29,88 +24,68 @@ function isValidQuantity(value: number) {
 }
 
 export async function createQuote(formData: FormData) {
+  const { organizationId } = await requireOrganization();
   const eventId = String(formData.get("eventId") ?? "");
   const requiredDeposit = moneyValue(formData, "requiredDeposit");
   const requiredUnitPrice = moneyValue(formData, "requiredUnitPrice");
   const conditions = String(formData.get("conditions") ?? "").trim();
   const selectedServiceIds = formData.getAll("serviceIds").map((value) => String(value));
 
-  if (!eventId || !isValidMoney(requiredDeposit) || !isValidMoney(requiredUnitPrice)) {
+  if (!eventId || !isValidMoney(requiredDeposit) || requiredDeposit < 1 || !isValidMoney(requiredUnitPrice)) {
     return;
   }
+  let actionError: string | undefined;
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    include: { client: true },
-  });
-  const requiredService = await prisma.service.findFirst({ where: { required: true, active: true } });
-  const existingQuote = await prisma.quote.findFirst({ where: { eventId } });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${eventId} FOR UPDATE`;
+      const [event, requiredService, selectedServices] = await Promise.all([
+        tx.event.findFirst({ where: { id: eventId, organizationId } }),
+        tx.service.findFirst({ where: { organizationId, required: true, active: true } }),
+        selectedServiceIds.length
+          ? tx.service.findMany({ where: { organizationId, id: { in: selectedServiceIds }, active: true, required: false }, orderBy: { name: "asc" } })
+          : [],
+      ]);
 
-  if (!event || !requiredService || existingQuote) {
-    return;
-  }
+      if (!event || event.status !== "CONSULTA") throw new WorkflowError("invalid-event-status");
+      if (!requiredService) throw new WorkflowError("required-service-missing");
+      if (selectedServices.length !== new Set(selectedServiceIds).size) throw new WorkflowError("invalid-services");
 
-  const selectedServices = selectedServiceIds.length
-    ? await prisma.service.findMany({
-        where: { id: { in: selectedServiceIds }, active: true, required: false },
-        orderBy: { name: "asc" },
-      })
-    : [];
+      const optionalItems = selectedServices.map((service) => {
+        const quantity = Number(formData.get(`quantity:${service.id}`) ?? 0);
+        const unitPrice = moneyValue(formData, `unitPrice:${service.id}`);
 
-  const optionalItems = selectedServices.map((service) => {
-    const quantity = Number(formData.get(`quantity:${service.id}`) ?? 0);
-    const unitPrice = moneyValue(formData, `unitPrice:${service.id}`);
+        if (!isValidQuantity(quantity) || !isValidMoney(unitPrice)) throw new WorkflowError("invalid-items");
 
-    if (!isValidQuantity(quantity) || !isValidMoney(unitPrice)) {
-      return null;
-    }
+        return { serviceId: service.id, serviceName: service.name, quantity, unitPrice };
+      });
+      const quoteTotal = optionalItems.reduce((total, item) => total + item.quantity * item.unitPrice, requiredUnitPrice);
 
-    return {
-      serviceId: service.id,
-      serviceName: service.name,
-      quantity,
-      unitPrice,
-    };
-  });
+      if (requiredDeposit > quoteTotal) throw new WorkflowError("deposit-over-total");
 
-  if (optionalItems.some((item) => item === null)) {
-    return;
-  }
-
-  const validOptionalItems = optionalItems.filter((item) => item !== null);
-  const quoteTotal = validOptionalItems.reduce(
-    (total, item) => total + item.quantity * item.unitPrice,
-    requiredUnitPrice,
-  );
-
-  if (requiredDeposit > quoteTotal) {
-    redirect("/cotizaciones?error=deposit-over-total#nueva-cotizacion");
-  }
-
-  await prisma.quote.create({
-    data: {
-      eventId,
-      status: "ENVIADA",
-      token: `${slug(event.client.name)}-${event.date.toISOString().slice(0, 10)}-${Date.now()}`,
-      expiresAt: event.date,
-      requiredDeposit,
-      conditions: conditions || "La fecha se reserva solo al registrar la seña.",
-      items: {
-        create: [
-          {
-            serviceId: requiredService.id,
-            serviceName: requiredService.name,
-            quantity: 1,
-            unitPrice: requiredUnitPrice,
-            required: true,
+      await tx.quote.create({
+        data: {
+          eventId,
+          status: "ENVIADA",
+          token: randomBytes(32).toString("base64url"),
+          expiresAt: event.date,
+          requiredDeposit,
+          conditions: conditions || "La fecha se reserva solo al registrar la seña.",
+          items: {
+            create: [
+              { serviceId: requiredService.id, serviceName: requiredService.name, quantity: 1, unitPrice: requiredUnitPrice, required: true },
+              ...optionalItems,
+            ],
           },
-          ...validOptionalItems,
-        ],
-      },
-    },
-  });
+        },
+      });
+      await tx.event.update({ where: { id: eventId }, data: { status: "COTIZADO" } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    actionError = error instanceof WorkflowError ? error.code : error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" ? "quote-exists" : "save-failed";
+  }
 
-  await prisma.event.update({ where: { id: eventId }, data: { status: "COTIZADO" } });
+  if (actionError) redirect(`/cotizaciones?eventId=${eventId}&error=${actionError}#nueva-cotizacion`);
 
   revalidatePath("/cotizaciones");
   revalidatePath("/eventos");
@@ -118,53 +93,55 @@ export async function createQuote(formData: FormData) {
 }
 
 export async function acceptQuoteManually(formData: FormData) {
+  const { organizationId } = await requireOrganization();
   const quoteId = String(formData.get("quoteId") ?? "");
 
   if (!quoteId) {
     return;
   }
 
-  const quote = await prisma.quote.findUnique({
-    where: { id: quoteId },
-    include: { event: true },
-  });
+  let token: string | undefined;
 
-  if (!quote || quote.status === "CANCELADA" || quote.status === "VENCIDA") {
+  try {
+    const quote = await prisma.$transaction((tx) => acceptQuote(tx, { id: quoteId }, true, organizationId), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    token = quote.token;
+  } catch {
     return;
   }
 
-  await prisma.quote.update({ where: { id: quote.id }, data: { status: "ACEPTADA" } });
-
-  if (quote.event.status !== "RESERVADO" && quote.event.status !== "CONFIRMADO") {
-    await prisma.event.update({ where: { id: quote.eventId }, data: { status: "ACEPTADO" } });
-  }
-
   revalidatePath("/cotizaciones");
-  revalidatePath(`/q/${quote.token}`);
+  if (token) revalidatePath(`/q/${token}`);
   revalidatePath("/eventos");
   revalidatePath("/");
 }
 
 export async function deleteQuote(formData: FormData) {
+  const { organizationId } = await requireOrganization();
   const quoteId = String(formData.get("quoteId") ?? "");
 
   if (!quoteId) {
     return;
   }
 
-  const quote = await prisma.quote.findUnique({
-    where: { id: quoteId },
-    include: { event: true, payments: true },
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Quote" WHERE "id" = ${quoteId} FOR UPDATE`;
+      const quote = await tx.quote.findFirst({
+        where: { id: quoteId, event: { organizationId } },
+        include: { _count: { select: { payments: true } } },
+      });
 
-  if (!quote || quote.payments.length > 0) {
+      if (!quote || quote._count.payments > 0 || !["ENVIADA", "RECHAZADA", "VENCIDA"].includes(quote.status)) {
+        throw new WorkflowError("quote-cannot-be-deleted");
+      }
+
+      await tx.event.update({ where: { id: quote.eventId, status: "COTIZADO" }, data: { status: "CONSULTA" } });
+      await tx.quote.delete({ where: { id: quote.id } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch {
     return;
-  }
-
-  await prisma.quote.delete({ where: { id: quote.id } });
-
-  if (quote.event.status === "COTIZADO" || quote.event.status === "ACEPTADO") {
-    await prisma.event.update({ where: { id: quote.eventId }, data: { status: "CONSULTA" } });
   }
 
   revalidatePath("/cotizaciones");

@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireOrganization } from "@/lib/auth-guards";
 
 export async function createEventType(name: string) {
+  const { organizationId } = await requireOrganization();
   const trimmedName = name.trim();
 
   if (!trimmedName) {
@@ -11,9 +13,9 @@ export async function createEventType(name: string) {
   }
 
   await prisma.eventType.upsert({
-    where: { name: trimmedName },
+    where: { organizationId_name: { organizationId, name: trimmedName } },
     update: { active: true },
-    create: { name: trimmedName, active: true },
+    create: { organizationId, name: trimmedName, active: true },
   });
 
   revalidatePath("/tipos-evento");
@@ -21,6 +23,7 @@ export async function createEventType(name: string) {
 }
 
 export async function updateEventType(id: string, name: string) {
+  const { organizationId } = await requireOrganization();
   const trimmedName = name.trim();
 
   if (!id || !trimmedName) {
@@ -28,7 +31,7 @@ export async function updateEventType(id: string, name: string) {
   }
 
   await prisma.eventType.update({
-    where: { id },
+    where: { id, organizationId },
     data: { name: trimmedName },
   });
 
@@ -37,14 +40,15 @@ export async function updateEventType(id: string, name: string) {
 }
 
 export async function toggleEventType(id: string) {
-  const eventType = await prisma.eventType.findUnique({ where: { id } });
+  const { organizationId } = await requireOrganization();
+  const eventType = await prisma.eventType.findFirst({ where: { id, organizationId } });
 
   if (!eventType) {
     return;
   }
 
   await prisma.eventType.update({
-    where: { id },
+    where: { id, organizationId },
     data: { active: !eventType.active },
   });
 
@@ -53,12 +57,15 @@ export async function toggleEventType(id: string) {
 }
 
 export async function deleteEventType(id: string) {
-  const eventsCount = await prisma.event.count({ where: { eventTypeId: id } });
+  const { organizationId } = await requireOrganization();
+  const eventType = await prisma.eventType.findFirst({ where: { id, organizationId }, select: { id: true } });
+  if (!eventType) return;
+  const eventsCount = await prisma.event.count({ where: { organizationId, eventTypeId: id } });
 
   if (eventsCount > 0) {
-    await prisma.eventType.update({ where: { id }, data: { active: false } });
+    await prisma.eventType.update({ where: { id, organizationId }, data: { active: false } });
   } else {
-    await prisma.eventType.delete({ where: { id } });
+    await prisma.eventType.delete({ where: { id, organizationId } });
   }
 
   revalidatePath("/tipos-evento");

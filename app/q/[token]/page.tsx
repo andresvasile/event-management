@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { formatCurrency, formatDate, paidTotal, quoteTotal } from "@/lib/domain";
-import { getClients, getEvents, getPayments, getQuoteByToken } from "@/lib/data";
+import { formatCurrency, formatDate, formatTurn, toDateKey } from "@/lib/domain";
+import { prisma } from "@/lib/prisma";
 import { acceptPublicQuote, rejectPublicQuote } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-function publicStatusLabel(status: string, reserved: boolean) {
+function publicStatusLabel(status: string, reserved: boolean, expired: boolean) {
   if (reserved) {
     return "Reserva realizada";
   }
@@ -18,6 +18,9 @@ function publicStatusLabel(status: string, reserved: boolean) {
     return "Cotización rechazada";
   }
 
+  if (status === "VENCIDA" || expired) return "Cotización vencida";
+  if (status === "CANCELADA") return "Cotización cancelada";
+
   return "Pendiente de respuesta";
 }
 
@@ -27,19 +30,27 @@ type PublicQuotePageProps = {
 
 export default async function PublicQuotePage({ params }: PublicQuotePageProps) {
   const { token } = await params;
-  const [clients, events, payments, quote] = await Promise.all([getClients(), getEvents(), getPayments(), getQuoteByToken(token)]);
+  const quote = await prisma.quote.findUnique({
+    where: { token },
+    include: {
+      event: { include: { client: true, eventType: true } },
+      items: { orderBy: { serviceName: "asc" } },
+      payments: { select: { amount: true } },
+    },
+  });
 
   if (!quote) {
     notFound();
   }
 
-  const event = events.find((item) => item.id === quote.eventId);
-  const client = event ? clients.find((item) => item.id === event.clientId) : undefined;
-  const canRespond = quote.status === "ENVIADA" || quote.status === "BORRADOR";
-  const total = quoteTotal(quote);
-  const paid = event ? paidTotal(event.id, payments) : 0;
-  const reserved = paid >= quote.requiredDeposit;
-  const statusLabel = publicStatusLabel(quote.status, reserved);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expired = today > quote.expiresAt && quote.status === "ENVIADA";
+  const canRespond = quote.status === "ENVIADA" && !expired;
+  const total = quote.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const paid = quote.payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const reserved = quote.event.status === "RESERVADO" || quote.event.status === "CONFIRMADO";
+  const statusLabel = publicStatusLabel(quote.status, reserved, expired);
 
   return (
     <main className="publicQuotePage">
@@ -47,7 +58,7 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
         <header className="publicQuoteHeader">
           <div>
             <span className="publicEyebrow">Cotización de evento</span>
-            <h1>{client?.name ?? "Cliente"}</h1>
+            <h1>{quote.event.client.name}</h1>
             <p>Revisá la propuesta para tu evento. Si estás de acuerdo, podés aceptarla desde esta pantalla.</p>
           </div>
           <span className={`badge status${quote.status}`}>{statusLabel}</span>
@@ -56,19 +67,19 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
         <section className="publicSummaryGrid" aria-label="Resumen de la cotización">
           <div>
             <span>Fecha</span>
-            <strong>{event ? formatDate(event.date) : "Sin fecha"}</strong>
+            <strong>{formatDate(toDateKey(quote.event.date))}</strong>
           </div>
           <div>
             <span>Turno</span>
-            <strong>{event?.turn ?? "Sin turno"}</strong>
+            <strong>{formatTurn(quote.event.turn)}</strong>
           </div>
           <div>
             <span>Tipo</span>
-            <strong>{event?.eventType ?? "Evento"}</strong>
+            <strong>{quote.event.eventType?.name ?? "Evento"}</strong>
           </div>
           <div>
             <span>Vence</span>
-            <strong>{formatDate(quote.expiresAt)}</strong>
+            <strong>{formatDate(toDateKey(quote.expiresAt))}</strong>
           </div>
         </section>
 
@@ -82,6 +93,10 @@ export default async function PublicQuotePage({ params }: PublicQuotePageProps) 
 
         {quote.status === "RECHAZADA" ? (
           <section className="warningBox">Cotización rechazada. Si querés revisar opciones, comunicate con el salón.</section>
+        ) : null}
+
+        {expired || quote.status === "VENCIDA" ? (
+          <section className="warningBox">Esta cotización venció. Comunicate con el salón para solicitar una actualización.</section>
         ) : null}
 
         <section className="publicQuoteBody">
